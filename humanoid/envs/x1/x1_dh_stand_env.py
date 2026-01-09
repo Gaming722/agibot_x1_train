@@ -566,6 +566,7 @@ class X1DHStandEnv(LeggedRobot):
         self.gait_start = torch.randint(0, 2, (self.num_envs,)).to(self.device)*0.5
 
 # ================================================ Rewards ================================================== #
+    # 奖励跟踪参考轨迹
     def _reward_ref_joint_pos(self):
         """
         Calculates the reward based on the difference between the current joint positions and the target joint positions.
@@ -579,6 +580,7 @@ class X1DHStandEnv(LeggedRobot):
         r[stand_command] = 1.0
         return r
     
+    # 约束两脚间距
     def _reward_feet_distance(self):
         """
         Calculates the reward based on the distance between the feet. Penilize feet get close to each other or too far away.
@@ -591,6 +593,7 @@ class X1DHStandEnv(LeggedRobot):
         d_max = torch.clamp(foot_dist - max_df, 0, 0.5)
         return (torch.exp(-torch.abs(d_min) * 100) + torch.exp(-torch.abs(d_max) * 100)) / 2
 
+    # 约束膝关节间距
     def _reward_knee_distance(self):
         """
         Calculates the reward based on the distance between the knee of the humanoid.
@@ -603,6 +606,7 @@ class X1DHStandEnv(LeggedRobot):
         d_max = torch.clamp(foot_dist - max_df, 0, 0.5)
         return (torch.exp(-torch.abs(d_min) * 100) + torch.exp(-torch.abs(d_max) * 100)) / 2
 
+    # 惩罚脚部滑动
     def _reward_foot_slip(self):
         """
         Calculates the reward for minimizing foot slip. The reward is based on the contact forces 
@@ -615,6 +619,7 @@ class X1DHStandEnv(LeggedRobot):
         rew *= contact
         return torch.sum(rew, dim=1)
 
+    # 奖励脚部浮空时间
     def _reward_feet_air_time(self):
         """
         Calculates the reward for feet air time, promoting longer steps. This is achieved by
@@ -632,6 +637,7 @@ class X1DHStandEnv(LeggedRobot):
         self.feet_air_time *= ~self.contact_filt
         return air_time.sum(dim=1)
 
+    # 奖励对齐参考步态
     def _reward_feet_contact_number(self):
         """
         Calculates a reward based on the number of feet contacts aligning with the gait phase. 
@@ -643,6 +649,7 @@ class X1DHStandEnv(LeggedRobot):
         reward = torch.where(contact == stance_mask, 1, -0.3)
         return torch.mean(reward, dim=1)
 
+    # 惩罚基体roll, pitch偏离
     def _reward_orientation(self):
         """
         Calculates the reward for maintaining a flat base orientation. It penalizes deviation 
@@ -652,6 +659,7 @@ class X1DHStandEnv(LeggedRobot):
         orientation = torch.exp(-torch.norm(self.projected_gravity[:, :2], dim=1) * 20)
         return (quat_mismatch + orientation) / 2.
 
+    # 惩罚过大脚部触地力
     def _reward_feet_contact_forces(self):
         """
         Calculates the reward for keeping contact forces within a specified range. Penalizes
@@ -659,6 +667,7 @@ class X1DHStandEnv(LeggedRobot):
         """
         return torch.sum((torch.norm(self.contact_forces[:, self.feet_indices, :], dim=-1) - self.cfg.rewards.max_contact_force).clip(0, 400), dim=1)
 
+    # 约束对齐默认关节位置
     def _reward_default_joint_pos(self):
         """
         Calculates the reward for keeping joint positions close to default positions, with a focus 
@@ -671,6 +680,7 @@ class X1DHStandEnv(LeggedRobot):
         yaw_roll = torch.clamp(yaw_roll - 0.1, 0, 50)
         return torch.exp(-yaw_roll * 100) - 0.01 * torch.norm(joint_diff, dim=1)
 
+    # 约束基体高度
     def _reward_base_height(self):
         """
         Calculates the reward based on the robot's base height. Penalizes deviation from a target base height.
@@ -683,6 +693,7 @@ class X1DHStandEnv(LeggedRobot):
         base_height = self.root_states[:, 2] - (measured_heights - self.cfg.rewards.feet_to_ankle_distance)
         return torch.exp(-torch.abs(base_height - self.cfg.rewards.base_height_target) * 100)
 
+    # 惩罚基体加速度
     def _reward_base_acc(self):
         """
         Computes the reward based on the base's acceleration. Penalizes high accelerations of the robot's base,
@@ -692,7 +703,7 @@ class X1DHStandEnv(LeggedRobot):
         rew = torch.exp(-torch.norm(root_acc, dim=1) * 3)
         return rew
 
-
+    # 惩罚基体z轴线速度，roll/pitch角速度
     def _reward_vel_mismatch_exp(self):
         """
         Computes a reward based on the mismatch in the robot's linear and angular velocities. 
@@ -705,6 +716,7 @@ class X1DHStandEnv(LeggedRobot):
 
         return c_update
 
+    # 奖励跟踪速度指令
     def _reward_track_vel_hard(self):
         """
         Calculates a reward for accurately tracking both linear and angular velocity commands.
@@ -724,6 +736,7 @@ class X1DHStandEnv(LeggedRobot):
         r = (lin_vel_error_exp + ang_vel_error_exp) / 2. - linear_error
         return r
     
+    # 奖励跟踪线速度指令
     def _reward_tracking_lin_vel(self):
         """
         Tracks linear velocity commands along the xy axes. 
@@ -740,6 +753,7 @@ class X1DHStandEnv(LeggedRobot):
 
         return r
 
+    # 奖励跟踪角速度指令
     def _reward_tracking_ang_vel(self):
         """
         Tracks angular velocity commands for yaw rotation.
@@ -756,6 +770,7 @@ class X1DHStandEnv(LeggedRobot):
 
         return r 
     
+    # 奖励脚部摆动高度
     def _reward_feet_clearance(self):
         """
         Calculates reward based on the clearance of the swing leg from the ground during movement.
@@ -779,6 +794,7 @@ class X1DHStandEnv(LeggedRobot):
         self.feet_height *= ~contact
         return rew_pos
 
+    # 惩罚前进速度过低
     def _reward_low_speed(self):
         """
         Rewards or penalizes the robot based on its speed relative to the commanded speed. 
@@ -812,6 +828,8 @@ class X1DHStandEnv(LeggedRobot):
         reward[sign_mismatch] = -2.0
         return reward * (self.commands[:, 0].abs() > 0.05)
     
+    # 能量相关
+    # 惩罚力矩大小
     def _reward_torques(self):
         """
         Penalizes the use of high torques in the robot's joints. Encourages efficient movement by minimizing
@@ -819,6 +837,7 @@ class X1DHStandEnv(LeggedRobot):
         """
         return torch.sum(torch.square(self.torques), dim=1)
     
+    # 惩罚脚踝力矩
     def _reward_ankle_torques(self):
         """
         Penalizes the use of high torques in the robot's joints. Encourages efficient movement by minimizing
@@ -827,6 +846,7 @@ class X1DHStandEnv(LeggedRobot):
         ankle_idx = [4,5,10,11]
         return torch.sum(torch.square(self.torques[:,ankle_idx]), dim=1)
     
+    # 惩罚脚部roll/pitch旋转
     def _reward_feet_rotation(self):
         feet_euler_xyz = self.feet_euler_xyz
         rotation = torch.sum(torch.square(feet_euler_xyz[:,:,:2]),dim=[1,2])
@@ -834,6 +854,7 @@ class X1DHStandEnv(LeggedRobot):
         r = torch.exp(-rotation*15)
         return r
 
+    # 惩罚关节速度
     def _reward_dof_vel(self):
         """
         Penalizes high velocities at the degrees of freedom (DOF) of the robot. This encourages smoother and 
@@ -841,6 +862,7 @@ class X1DHStandEnv(LeggedRobot):
         """
         return torch.sum(torch.square(self.dof_vel), dim=1)
     
+    # 惩罚关节加速度
     def _reward_dof_acc(self):
         """
         Penalizes high accelerations at the robot's degrees of freedom (DOF). This is important for ensuring
@@ -848,6 +870,7 @@ class X1DHStandEnv(LeggedRobot):
         """
         return torch.sum(torch.square((self.last_dof_vel - self.dof_vel) / self.dt), dim=1)
     
+    # 惩罚碰撞
     def _reward_collision(self):
         """
         Penalizes collisions of the robot with the environment, specifically focusing on selected body parts.
@@ -855,6 +878,7 @@ class X1DHStandEnv(LeggedRobot):
         """
         return torch.sum(1.*(torch.norm(self.contact_forces[:, self.penalised_contact_indices, :], dim=-1) > 0.1), dim=1)
     
+    # 奖励动作平滑
     def _reward_action_smoothness(self):
         """
         Encourages smoothness in the robot's actions by penalizing large differences between consecutive actions.
@@ -867,10 +891,12 @@ class X1DHStandEnv(LeggedRobot):
         term_3 = 0.05 * torch.sum(torch.abs(self.actions), dim=1)
         return term_1 + term_2 + term_3
     
+    # 惩罚环境终止
     def _reward_termination(self):
         # Terminal reward / penalty
         return self.reset_buf * ~self.time_out_buf
     
+    # 奖励站立
     def _reward_stand_still(self):
         # penalize motion at zero commands
         stand_command = (torch.norm(self.commands[:, :3], dim=1) <= self.cfg.commands.stand_com_threshold)
@@ -879,22 +905,26 @@ class X1DHStandEnv(LeggedRobot):
                         torch.zeros_like(r))
         return r
     
+    # 惩罚脚部碰撞竖立面
     def _reward_feet_stumble(self):
         # Penalize feet hitting vertical surfaces
         return torch.any(torch.norm(self.contact_forces[:, self.feet_indices, :2], dim=2) >\
              5 *torch.abs(self.contact_forces[:, self.feet_indices, 2]), dim=1)
 
+    # 惩罚关节位置超限
     def _reward_dof_pos_limits(self):
         # Penalize dof positions too close to the limit
         out_of_limits = -(self.dof_pos - self.dof_pos_limits[:, 0]).clip(max=0.) # lower limit
         out_of_limits += (self.dof_pos - self.dof_pos_limits[:, 1]).clip(min=0.)
         return torch.sum(out_of_limits, dim=1)
 
+    # 惩罚关节速度超限
     def _reward_dof_vel_limits(self):
         # Penalize dof velocities too close to the limit
         # clip to max error = 1 rad/s per joint to avoid huge penalties
         return torch.sum((torch.abs(self.dof_vel) - self.dof_vel_limits*self.cfg.rewards.soft_dof_vel_limit).clip(min=0., max=1.), dim=1)
 
+    # 惩罚关节力矩超限
     def _reward_dof_torque_limits(self):
         # penalize torques too close to the limit
         return torch.sum((torch.abs(self.torques) - self.torque_limits*self.cfg.rewards.soft_torque_limit).clip(min=0.), dim=1)
