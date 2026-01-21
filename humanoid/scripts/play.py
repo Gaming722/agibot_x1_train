@@ -92,6 +92,14 @@ def play(args):
     env_cfg.terrain.num_cols = 5
     env_cfg.terrain.max_init_terrain_level = 5
     env_cfg.env.episode_length_s = 1000
+    if args.task == "x1_dh_stand":
+        env_cfg.terrain.border_size = 1
+        env_cfg.terrain.num_rows = 10	
+        env_cfg.terrain.num_cols = 10
+        if env_cfg.env.show_ref_pos:
+            env_cfg.env.num_envs = 1
+            env_cfg.terrain.mesh_type = "plane"
+            env_cfg.commands.sw_switch = False
     env_cfg.noise.add_noise = False
     env_cfg.domain_rand.randomize_friction = False 
     env_cfg.domain_rand.push_robots = False 

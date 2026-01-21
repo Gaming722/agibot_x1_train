@@ -120,7 +120,8 @@ class LeggedRobot(BaseTask):
         self.render()
         for _ in range(self.cfg.control.decimation):
             self.torques = self._compute_torques(self.actions).view(self.torques.shape)
-            self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(self.torques))
+            if not self.cfg.env.show_ref_pos:
+                self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(self.torques))
             self.gym.simulate(self.sim)
             if self.device == 'cpu':
                 self.gym.fetch_results(self.sim, True)
@@ -145,6 +146,15 @@ class LeggedRobot(BaseTask):
                 self.imu_lag_buffer[:,:,1:] = self.imu_lag_buffer[:,:,:self.cfg.domain_rand.imu_lag_timesteps_range[1]].clone()
                 self.imu_lag_buffer[:,:,0] = torch.cat((self.base_ang_vel, self.base_euler_xyz ), 1).clone()
         
+        if self.cfg.env.show_ref_pos:    
+            self.compute_ref_state()
+            dof_vel = torch.zeros_like(self.ref_dof_pos)
+            dof_state = torch.stack((self.ref_dof_pos.clone(),dof_vel),dim=-1).reshape(self.num_envs,self.num_dof*2)
+            ref_root_state = self.base_init_state.repeat(self.num_envs, 1)
+            # breakpoint()
+            self.gym.set_actor_root_state_tensor(self.sim, gymtorch.unwrap_tensor(ref_root_state))
+            self.gym.set_dof_state_tensor(self.sim, gymtorch.unwrap_tensor(dof_state))
+
         self.post_physics_step()
 
         # return clipped obs, clipped states (None), rewards, dones and infos
